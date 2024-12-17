@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, PencilBrush, IText } from "fabric";
+import { Canvas as FabricCanvas, PencilBrush, IText, Image as FabricImage } from "fabric";
 import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
 import { PropertiesBar } from "./PropertiesBar";
@@ -155,14 +155,14 @@ export const PDFViewer = ({ pdfPath, activeTool }: PDFViewerProps) => {
           viewport: viewport,
         }).promise;
         
-        const img = await new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.src = canvas.toDataURL();
-          img.onload = () => resolve(img);
-        });
+        const dataUrl = canvas.toDataURL();
         
-        fabricCanvas.backgroundImage = img;
-        fabricCanvas.renderAll();
+        FabricImage.fromURL(dataUrl, (img) => {
+          fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas), {
+            scaleX: fabricCanvas.width! / img.width!,
+            scaleY: fabricCanvas.height! / img.height!
+          });
+        });
         
         toast("PDF loaded successfully");
       } catch (error) {

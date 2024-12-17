@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, PencilBrush, Image, Circle, IText } from "fabric";
+import { Canvas as FabricCanvas, PencilBrush, Image, Circle, IText, Rect } from "fabric";
 import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
 import { PropertiesBar } from "./PropertiesBar";
@@ -14,6 +14,8 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [selectedObject, setSelectedObject] = useState<any>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const startPointRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -24,12 +26,10 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
       backgroundColor: "#ffffff",
     });
 
-    // Initialize the freeDrawingBrush explicitly
     canvas.freeDrawingBrush = new PencilBrush(canvas);
     canvas.freeDrawingBrush.color = "#2563eb";
     canvas.freeDrawingBrush.width = 2;
 
-    // Set up object selection event
     canvas.on('selection:created', (e) => setSelectedObject(e.selected?.[0]));
     canvas.on('selection:updated', (e) => setSelectedObject(e.selected?.[0]));
     canvas.on('selection:cleared', () => setSelectedObject(null));
@@ -44,60 +44,124 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   useEffect(() => {
     if (!fabricCanvas) return;
 
-    fabricCanvas.isDrawingMode = activeTool === "draw";
-    
-    if (activeTool === "draw" && fabricCanvas.freeDrawingBrush) {
-      fabricCanvas.freeDrawingBrush.color = "#2563eb";
-      fabricCanvas.freeDrawingBrush.width = 2;
-    }
+    // Remove all event listeners
+    fabricCanvas.off('mouse:down');
+    fabricCanvas.off('mouse:move');
+    fabricCanvas.off('mouse:up');
 
-    // Handle cursor tool
-    if (activeTool === "select") {
-      fabricCanvas.selection = true;
-      fabricCanvas.defaultCursor = "default";
-      fabricCanvas.hoverCursor = "move";
-    }
+    // Reset canvas state
+    fabricCanvas.isDrawingMode = false;
+    fabricCanvas.selection = false;
+    fabricCanvas.defaultCursor = "default";
+    fabricCanvas.hoverCursor = "default";
 
-    // Handle text tool
-    if (activeTool === "text") {
-      fabricCanvas.defaultCursor = "text";
-      fabricCanvas.on('mouse:down', (options) => {
-        if (activeTool === "text") {
-          const pointer = fabricCanvas.getPointer(options.e);
-          const text = new IText('Click to edit', {
-            left: pointer.x,
-            top: pointer.y,
-            fontSize: 20,
-            fill: '#2563eb',
-          });
-          fabricCanvas.add(text);
-          fabricCanvas.setActiveObject(text);
-          text.enterEditing();
-          fabricCanvas.renderAll();
-        }
-      });
-    }
+    // Configure tool-specific behavior
+    switch (activeTool) {
+      case "select":
+        fabricCanvas.selection = true;
+        fabricCanvas.hoverCursor = "move";
+        break;
 
-    // Handle pin tool
-    if (activeTool === "pin") {
-      fabricCanvas.defaultCursor = "crosshair";
-      fabricCanvas.on('mouse:down', (options) => {
-        if (activeTool === "pin") {
-          const pointer = fabricCanvas.getPointer(options.e);
-          const circle = new Circle({
-            left: pointer.x,
-            top: pointer.y,
-            radius: 10,
-            fill: '#2563eb',
-            originX: 'center',
-            originY: 'center',
-          });
-          fabricCanvas.add(circle);
-          fabricCanvas.renderAll();
-        }
-      });
+      case "draw":
+        fabricCanvas.isDrawingMode = true;
+        fabricCanvas.freeDrawingBrush.color = "#2563eb";
+        fabricCanvas.freeDrawingBrush.width = 2;
+        break;
+
+      case "text":
+        fabricCanvas.defaultCursor = "text";
+        fabricCanvas.on('mouse:down', (options) => {
+          if (activeTool === "text") {
+            const pointer = fabricCanvas.getPointer(options.e);
+            const text = new IText('Click to edit', {
+              left: pointer.x,
+              top: pointer.y,
+              fontSize: 20,
+              fill: '#2563eb',
+              selectable: true,
+            });
+            fabricCanvas.add(text);
+            fabricCanvas.setActiveObject(text);
+            text.enterEditing();
+            fabricCanvas.renderAll();
+          }
+        });
+        break;
+
+      case "pin":
+        fabricCanvas.defaultCursor = "crosshair";
+        fabricCanvas.on('mouse:down', (options) => {
+          if (activeTool === "pin") {
+            const pointer = fabricCanvas.getPointer(options.e);
+            const circle = new Circle({
+              left: pointer.x,
+              top: pointer.y,
+              radius: 10,
+              fill: '#2563eb',
+              originX: 'center',
+              originY: 'center',
+              selectable: false,
+              hasControls: false,
+            });
+            fabricCanvas.add(circle);
+            fabricCanvas.renderAll();
+          }
+        });
+        break;
+
+      case "rectangle":
+        fabricCanvas.defaultCursor = "crosshair";
+        fabricCanvas.on('mouse:down', (options) => {
+          if (activeTool === "rectangle") {
+            setIsDrawing(true);
+            const pointer = fabricCanvas.getPointer(options.e);
+            startPointRef.current = { x: pointer.x, y: pointer.y };
+          }
+        });
+
+        fabricCanvas.on('mouse:move', (options) => {
+          if (activeTool === "rectangle" && isDrawing && startPointRef.current) {
+            const pointer = fabricCanvas.getPointer(options.e);
+            const startPoint = startPointRef.current;
+            
+            const rect = new Rect({
+              left: Math.min(startPoint.x, pointer.x),
+              top: Math.min(startPoint.y, pointer.y),
+              width: Math.abs(startPoint.x - pointer.x),
+              height: Math.abs(startPoint.y - pointer.y),
+              fill: 'transparent',
+              stroke: '#2563eb',
+              strokeWidth: 2,
+              selectable: false,
+            });
+
+            fabricCanvas.remove(fabricCanvas.getObjects().find(obj => 
+              obj.type === 'rect' && obj.data?.isTemp
+            ));
+            rect.data = { isTemp: true };
+            fabricCanvas.add(rect);
+            fabricCanvas.renderAll();
+          }
+        });
+
+        fabricCanvas.on('mouse:up', () => {
+          if (activeTool === "rectangle" && isDrawing) {
+            const tempRect = fabricCanvas.getObjects().find(obj => 
+              obj.type === 'rect' && obj.data?.isTemp
+            );
+            if (tempRect) {
+              tempRect.data = { isTemp: false };
+              tempRect.set('selectable', false);
+              tempRect.set('hasControls', false);
+            }
+            setIsDrawing(false);
+            startPointRef.current = null;
+            fabricCanvas.renderAll();
+          }
+        });
+        break;
     }
-  }, [activeTool, fabricCanvas]);
+  }, [activeTool, fabricCanvas, isDrawing]);
 
   useEffect(() => {
     const loadPDF = async () => {
@@ -143,15 +207,15 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   }, [module, level, fabricCanvas]);
 
   const handleUndo = () => {
-    if (fabricCanvas && fabricCanvas.historyUndo) {
-      fabricCanvas.undo();
+    if (fabricCanvas) {
+      fabricCanvas.remove(fabricCanvas.getObjects()[fabricCanvas.getObjects().length - 1]);
+      fabricCanvas.renderAll();
     }
   };
 
   const handleRedo = () => {
-    if (fabricCanvas && fabricCanvas.historyRedo) {
-      fabricCanvas.redo();
-    }
+    // Implement when we have history tracking
+    toast("Redo not implemented yet");
   };
 
   const handleClear = () => {

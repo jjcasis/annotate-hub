@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
+import { Switch } from "./ui/switch";
 
 interface PropertiesBarProps {
   object: any;
@@ -12,12 +13,14 @@ export const PropertiesBar = ({ object, onUpdate }: PropertiesBarProps) => {
   const [color, setColor] = useState(object.fill || "#000000");
   const [fontSize, setFontSize] = useState(object.fontSize || 20);
   const [opacity, setOpacity] = useState((object.opacity || 1) * 100);
+  const [isEditable, setIsEditable] = useState(object.selectable || false);
 
   useEffect(() => {
     if (object) {
       setColor(object.fill || "#000000");
       setFontSize(object.fontSize || 20);
       setOpacity((object.opacity || 1) * 100);
+      setIsEditable(object.selectable || false);
     }
   }, [object]);
 
@@ -41,6 +44,13 @@ export const PropertiesBar = ({ object, onUpdate }: PropertiesBarProps) => {
     const newOpacity = value[0];
     setOpacity(newOpacity);
     object.set('opacity', newOpacity / 100);
+    onUpdate();
+  };
+
+  const handleEditableChange = (checked: boolean) => {
+    setIsEditable(checked);
+    object.set('selectable', checked);
+    object.set('hasControls', checked);
     onUpdate();
   };
 
@@ -84,6 +94,17 @@ export const PropertiesBar = ({ object, onUpdate }: PropertiesBarProps) => {
           className="w-48"
         />
       </div>
+
+      {(object.type === 'path' || object.type === 'circle') && (
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="editable"
+            checked={isEditable}
+            onCheckedChange={handleEditableChange}
+          />
+          <Label htmlFor="editable">Enable editing</Label>
+        </div>
+      )}
     </div>
   );
 };

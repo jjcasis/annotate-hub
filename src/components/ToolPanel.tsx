@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Pencil, Type, MapPin, Eraser, Download, MousePointer, Undo, Redo } from "lucide-react";
+import { Pencil, Type, MapPin, Eraser, Download, MousePointer, Undo, Redo, Square } from "lucide-react";
 
 interface ToolPanelProps {
   activeTool: string;
@@ -44,6 +44,14 @@ export const ToolPanel = ({ activeTool, onToolSelect, onClear, onExport, onUndo,
       >
         <MapPin className="w-4 h-4 mr-2" />
         Pin
+      </Button>
+      <Button
+        variant={activeTool === "rectangle" ? "default" : "outline"}
+        onClick={() => onToolSelect("rectangle")}
+        className="justify-start"
+      >
+        <Square className="w-4 h-4 mr-2" />
+        Rectangle
       </Button>
       <Button
         variant="outline"

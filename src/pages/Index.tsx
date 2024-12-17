@@ -19,6 +19,16 @@ const Index = () => {
     console.log("Clear functionality to be implemented");
   };
 
+  const handleUndo = () => {
+    // To be implemented
+    console.log("Undo functionality to be implemented");
+  };
+
+  const handleRedo = () => {
+    // To be implemented
+    console.log("Redo functionality to be implemented");
+  };
+
   return (
     <div className="min-h-screen bg-accent p-8">
       <header className="mb-8">
@@ -47,6 +57,8 @@ const Index = () => {
           onToolSelect={setActiveTool}
           onClear={handleClear}
           onExport={handleExport}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
         />
         <PDFViewer
           module={selectedModule}

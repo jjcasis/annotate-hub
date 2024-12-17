@@ -1,16 +1,26 @@
 import { Button } from "@/components/ui/button";
-import { Pencil, Type, MapPin, Eraser, Download } from "lucide-react";
+import { Pencil, Type, MapPin, Eraser, Download, MousePointer, Undo, Redo } from "lucide-react";
 
 interface ToolPanelProps {
   activeTool: string;
   onToolSelect: (tool: string) => void;
   onClear: () => void;
   onExport: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
-export const ToolPanel = ({ activeTool, onToolSelect, onClear, onExport }: ToolPanelProps) => {
+export const ToolPanel = ({ activeTool, onToolSelect, onClear, onExport, onUndo, onRedo }: ToolPanelProps) => {
   return (
     <div className="flex flex-col gap-2 p-4 bg-white rounded-lg shadow-md">
+      <Button
+        variant={activeTool === "select" ? "default" : "outline"}
+        onClick={() => onToolSelect("select")}
+        className="justify-start"
+      >
+        <MousePointer className="w-4 h-4 mr-2" />
+        Select
+      </Button>
       <Button
         variant={activeTool === "draw" ? "default" : "outline"}
         onClick={() => onToolSelect("draw")}
@@ -34,6 +44,22 @@ export const ToolPanel = ({ activeTool, onToolSelect, onClear, onExport }: ToolP
       >
         <MapPin className="w-4 h-4 mr-2" />
         Pin
+      </Button>
+      <Button
+        variant="outline"
+        onClick={onUndo}
+        className="justify-start"
+      >
+        <Undo className="w-4 h-4 mr-2" />
+        Undo
+      </Button>
+      <Button
+        variant="outline"
+        onClick={onRedo}
+        className="justify-start"
+      >
+        <Redo className="w-4 h-4 mr-2" />
+        Redo
       </Button>
       <Button
         variant="outline"

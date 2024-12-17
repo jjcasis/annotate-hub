@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, PencilBrush, Image } from "fabric";
+import { Canvas as FabricCanvas, PencilBrush, Image, Circle, IText } from "fabric";
 import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
+import { PropertiesBar } from "./PropertiesBar";
 
 interface PDFViewerProps {
   module: string;
@@ -12,6 +13,7 @@ interface PDFViewerProps {
 export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+  const [selectedObject, setSelectedObject] = useState<any>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -26,6 +28,11 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
     canvas.freeDrawingBrush = new PencilBrush(canvas);
     canvas.freeDrawingBrush.color = "#2563eb";
     canvas.freeDrawingBrush.width = 2;
+
+    // Set up object selection event
+    canvas.on('selection:created', (e) => setSelectedObject(e.selected?.[0]));
+    canvas.on('selection:updated', (e) => setSelectedObject(e.selected?.[0]));
+    canvas.on('selection:cleared', () => setSelectedObject(null));
 
     setFabricCanvas(canvas);
 
@@ -43,18 +50,62 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
       fabricCanvas.freeDrawingBrush.color = "#2563eb";
       fabricCanvas.freeDrawingBrush.width = 2;
     }
+
+    // Handle cursor tool
+    if (activeTool === "select") {
+      fabricCanvas.selection = true;
+      fabricCanvas.defaultCursor = "default";
+      fabricCanvas.hoverCursor = "move";
+    }
+
+    // Handle text tool
+    if (activeTool === "text") {
+      fabricCanvas.defaultCursor = "text";
+      fabricCanvas.on('mouse:down', (options) => {
+        if (activeTool === "text") {
+          const pointer = fabricCanvas.getPointer(options.e);
+          const text = new IText('Click to edit', {
+            left: pointer.x,
+            top: pointer.y,
+            fontSize: 20,
+            fill: '#2563eb',
+          });
+          fabricCanvas.add(text);
+          fabricCanvas.setActiveObject(text);
+          text.enterEditing();
+          fabricCanvas.renderAll();
+        }
+      });
+    }
+
+    // Handle pin tool
+    if (activeTool === "pin") {
+      fabricCanvas.defaultCursor = "crosshair";
+      fabricCanvas.on('mouse:down', (options) => {
+        if (activeTool === "pin") {
+          const pointer = fabricCanvas.getPointer(options.e);
+          const circle = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 10,
+            fill: '#2563eb',
+            originX: 'center',
+            originY: 'center',
+          });
+          fabricCanvas.add(circle);
+          fabricCanvas.renderAll();
+        }
+      });
+    }
   }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
     const loadPDF = async () => {
       try {
-        // In a real app, this would be a dynamic URL based on module and level
         const url = `/placeholder.pdf`;
-        
         const loadingTask = pdfjsLib.getDocument(url);
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
-        
         const viewport = page.getViewport({ scale: 1.0 });
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
@@ -69,13 +120,14 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
           viewport: viewport,
         }).promise;
         
-        // Create a Fabric Image object from the canvas data URL
         if (fabricCanvas) {
-          Image.fromURL(canvas.toDataURL(), (img) => {
-            fabricCanvas.setBackgroundImage(img, () => {
-              fabricCanvas.renderAll();
-            });
+          const img = await new Promise<HTMLImageElement>((resolve) => {
+            const img = new Image();
+            img.src = canvas.toDataURL();
+            img.onload = () => resolve(img);
           });
+          
+          fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
         }
         
         toast("PDF loaded successfully");
@@ -90,9 +142,41 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
     }
   }, [module, level, fabricCanvas]);
 
+  const handleUndo = () => {
+    if (fabricCanvas && fabricCanvas.historyUndo) {
+      fabricCanvas.undo();
+    }
+  };
+
+  const handleRedo = () => {
+    if (fabricCanvas && fabricCanvas.historyRedo) {
+      fabricCanvas.redo();
+    }
+  };
+
+  const handleClear = () => {
+    if (fabricCanvas) {
+      fabricCanvas.getObjects().forEach((obj) => {
+        if (obj !== fabricCanvas.backgroundImage) {
+          fabricCanvas.remove(obj);
+        }
+      });
+      fabricCanvas.renderAll();
+      toast("Canvas cleared!");
+    }
+  };
+
   return (
-    <div className="border border-gray-200 rounded-lg shadow-lg overflow-hidden bg-white">
-      <canvas ref={canvasRef} className="max-w-full" />
+    <div className="flex flex-col gap-4">
+      {selectedObject && (
+        <PropertiesBar
+          object={selectedObject}
+          onUpdate={() => fabricCanvas?.renderAll()}
+        />
+      )}
+      <div className="border border-gray-200 rounded-lg shadow-lg overflow-hidden bg-white">
+        <canvas ref={canvasRef} className="max-w-full" />
+      </div>
     </div>
   );
 };

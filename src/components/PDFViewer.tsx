@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas } from "fabric";
+import { Canvas as FabricCanvas, PencilBrush } from "fabric";
 import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
 
@@ -22,6 +22,8 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
       backgroundColor: "#ffffff",
     });
 
+    // Initialize the freeDrawingBrush explicitly
+    canvas.freeDrawingBrush = new PencilBrush(canvas);
     canvas.freeDrawingBrush.color = "#2563eb";
     canvas.freeDrawingBrush.width = 2;
 
@@ -67,8 +69,11 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
           viewport: viewport,
         }).promise;
         
-        // Set the PDF as background image of the Fabric canvas
-        fabricCanvas?.setBackgroundImage(canvas.toDataURL(), fabricCanvas.renderAll.bind(fabricCanvas));
+        // Update to use backgroundImage property directly
+        if (fabricCanvas) {
+          fabricCanvas.backgroundImage = canvas.toDataURL();
+          fabricCanvas.renderAll();
+        }
         
         toast("PDF loaded successfully");
       } catch (error) {

@@ -3,30 +3,44 @@ import { ModuleSelector } from "@/components/ModuleSelector";
 import { LevelSelector } from "@/components/LevelSelector";
 import { ToolPanel } from "@/components/ToolPanel";
 import { PDFViewer } from "@/components/PDFViewer";
+import { levelMappings } from "@/config/pdfMappings";
 
 const Index = () => {
   const [selectedModule, setSelectedModule] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("");
+  const [selectedView, setSelectedView] = useState<"POST" | "FRONT">("POST");
   const [activeTool, setActiveTool] = useState("select");
 
   const handleExport = () => {
-    // To be implemented
     console.log("Export functionality to be implemented");
   };
 
   const handleClear = () => {
-    // To be implemented
     console.log("Clear functionality to be implemented");
   };
 
   const handleUndo = () => {
-    // To be implemented
     console.log("Undo functionality to be implemented");
   };
 
   const handleRedo = () => {
-    // To be implemented
     console.log("Redo functionality to be implemented");
+  };
+
+  const getPDFPath = () => {
+    if (!selectedModule || !selectedLevel) return "";
+    
+    const levelConfig = levelMappings[selectedModule]?.find(
+      (level) => level.label === selectedLevel
+    );
+
+    if (!levelConfig) return "";
+
+    if (typeof levelConfig.fileName === "string") {
+      return `/pdfs/${levelConfig.fileName}`;
+    }
+
+    return `/pdfs/${levelConfig.fileName[selectedView]}`;
   };
 
   return (
@@ -45,8 +59,11 @@ const Index = () => {
         />
         {selectedModule && (
           <LevelSelector
+            selectedModule={selectedModule}
             selectedLevel={selectedLevel}
+            selectedView={selectedView}
             onLevelSelect={setSelectedLevel}
+            onViewToggle={setSelectedView}
           />
         )}
       </div>
@@ -61,8 +78,7 @@ const Index = () => {
           onRedo={handleRedo}
         />
         <PDFViewer
-          module={selectedModule}
-          level={selectedLevel}
+          pdfPath={getPDFPath()}
           activeTool={activeTool}
         />
       </div>

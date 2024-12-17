@@ -8,12 +8,11 @@ import { ToolsManager } from "../utils/toolsManager";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface PDFViewerProps {
-  module: string;
-  level: string;
+  pdfPath: string;
   activeTool: string;
 }
 
-export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
+export const PDFViewer = ({ pdfPath, activeTool }: PDFViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [selectedObject, setSelectedObject] = useState<any>(null);
@@ -125,7 +124,6 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
           if (activeTool === "rectangle") {
             const finished = toolsManagerRef.current?.finishRectangle();
             if (finished) {
-              // Switch back to select mode after rectangle is created
               const event = new CustomEvent('toolSelect', { detail: 'select' });
               window.dispatchEvent(event);
             }
@@ -137,9 +135,10 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
 
   useEffect(() => {
     const loadPDF = async () => {
+      if (!pdfPath || !fabricCanvas) return;
+
       try {
-        const url = `/placeholder.pdf`;
-        const loadingTask = pdfjsLib.getDocument(url);
+        const loadingTask = pdfjsLib.getDocument(pdfPath);
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 1.0 });
@@ -156,17 +155,14 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
           viewport: viewport,
         }).promise;
         
-        if (fabricCanvas) {
-          const img = await new Promise<HTMLImageElement>((resolve) => {
-            const img = new Image();
-            img.src = canvas.toDataURL();
-            img.onload = () => resolve(img);
-          });
-          
-          fabricCanvas.setBackgroundImage(img.src, () => {
-            fabricCanvas.renderAll();
-          });
-        }
+        const img = await new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.src = canvas.toDataURL();
+          img.onload = () => resolve(img);
+        });
+        
+        fabricCanvas.backgroundImage = img;
+        fabricCanvas.renderAll();
         
         toast("PDF loaded successfully");
       } catch (error) {
@@ -175,10 +171,8 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
       }
     };
 
-    if (fabricCanvas && module && level) {
-      loadPDF();
-    }
-  }, [module, level, fabricCanvas]);
+    loadPDF();
+  }, [pdfPath, fabricCanvas]);
 
   const handleUndo = () => {
     historyManagerRef.current?.undo();

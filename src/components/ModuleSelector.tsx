@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { levelMappings } from "@/config/pdfMappings";
 
 interface ModuleSelectorProps {
   selectedModule: string;
   onModuleSelect: (module: string) => void;
 }
 
-const modules = ["Módulo A", "Módulo B", "Módulo C"];
+const modules = Object.keys(levelMappings);
 
 export const ModuleSelector = ({ selectedModule, onModuleSelect }: ModuleSelectorProps) => {
   return (

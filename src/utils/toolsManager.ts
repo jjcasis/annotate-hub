@@ -1,11 +1,16 @@
 import { Canvas as FabricCanvas, Circle, Rect } from 'fabric';
 import { HistoryManager } from './historyManager';
 
+interface CustomFabricObject extends fabric.Object {
+  isTemp?: boolean;
+}
+
 export class ToolsManager {
   private canvas: FabricCanvas;
   private historyManager: HistoryManager;
   private isDrawing: boolean = false;
   private startPoint: { x: number; y: number } | null = null;
+  private tempRect: Rect | null = null;
 
   constructor(canvas: FabricCanvas, historyManager: HistoryManager) {
     this.canvas = canvas;
@@ -36,7 +41,11 @@ export class ToolsManager {
   updateRectangle(pointer: { x: number; y: number }) {
     if (!this.isDrawing || !this.startPoint) return;
 
-    const rect = new Rect({
+    if (this.tempRect) {
+      this.canvas.remove(this.tempRect);
+    }
+
+    this.tempRect = new Rect({
       left: Math.min(this.startPoint.x, pointer.x),
       top: Math.min(this.startPoint.y, pointer.y),
       width: Math.abs(this.startPoint.x - pointer.x),
@@ -48,21 +57,15 @@ export class ToolsManager {
       hasControls: true,
     });
 
-    this.canvas.remove(
-      this.canvas.getObjects().find((obj) => obj.data?.isTemp)
-    );
-    rect.data = { isTemp: true };
-    this.canvas.add(rect);
+    this.canvas.add(this.tempRect);
     this.canvas.renderAll();
   }
 
   finishRectangle() {
-    if (!this.isDrawing) return;
+    if (!this.isDrawing) return false;
 
-    const tempRect = this.canvas.getObjects().find((obj) => obj.data?.isTemp);
-    if (tempRect) {
-      tempRect.data = { isTemp: false };
-    }
+    // Keep the last rectangle as permanent
+    this.tempRect = null;
     this.isDrawing = false;
     this.startPoint = null;
     this.canvas.renderAll();

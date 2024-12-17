@@ -163,7 +163,9 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
             img.onload = () => resolve(img);
           });
           
-          fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
+          fabricCanvas.setBackgroundImage(img.src, () => {
+            fabricCanvas.renderAll();
+          });
         }
         
         toast("PDF loaded successfully");

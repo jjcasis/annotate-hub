@@ -11,7 +11,7 @@ export class HistoryManager {
   }
 
   saveState() {
-    const json = JSON.stringify(this.canvas.toJSON(['selectable', 'hasControls']));
+    const json = JSON.stringify(this.canvas.toJSON());
     this.undoStack.push(json);
     this.redoStack = [];
   }

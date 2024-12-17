@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, PencilBrush, Image, Circle, IText, Rect } from "fabric";
+import { Canvas as FabricCanvas, PencilBrush, IText } from "fabric";
 import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
 import { PropertiesBar } from "./PropertiesBar";
+import { HistoryManager } from "../utils/historyManager";
+import { ToolsManager } from "../utils/toolsManager";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface PDFViewerProps {
   module: string;
@@ -14,8 +17,8 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [selectedObject, setSelectedObject] = useState<any>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const startPointRef = useRef<{ x: number; y: number } | null>(null);
+  const historyManagerRef = useRef<HistoryManager | null>(null);
+  const toolsManagerRef = useRef<ToolsManager | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -33,6 +36,12 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
     canvas.on('selection:created', (e) => setSelectedObject(e.selected?.[0]));
     canvas.on('selection:updated', (e) => setSelectedObject(e.selected?.[0]));
     canvas.on('selection:cleared', () => setSelectedObject(null));
+    canvas.on('object:modified', () => {
+      historyManagerRef.current?.saveState();
+    });
+
+    historyManagerRef.current = new HistoryManager(canvas);
+    toolsManagerRef.current = new ToolsManager(canvas, historyManagerRef.current);
 
     setFabricCanvas(canvas);
 
@@ -44,18 +53,15 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   useEffect(() => {
     if (!fabricCanvas) return;
 
-    // Remove all event listeners
     fabricCanvas.off('mouse:down');
     fabricCanvas.off('mouse:move');
     fabricCanvas.off('mouse:up');
 
-    // Reset canvas state
     fabricCanvas.isDrawingMode = false;
     fabricCanvas.selection = false;
     fabricCanvas.defaultCursor = "default";
     fabricCanvas.hoverCursor = "default";
 
-    // Configure tool-specific behavior
     switch (activeTool) {
       case "select":
         fabricCanvas.selection = true;
@@ -84,6 +90,7 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
             fabricCanvas.setActiveObject(text);
             text.enterEditing();
             fabricCanvas.renderAll();
+            historyManagerRef.current?.saveState();
           }
         });
         break;
@@ -93,18 +100,7 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
         fabricCanvas.on('mouse:down', (options) => {
           if (activeTool === "pin") {
             const pointer = fabricCanvas.getPointer(options.e);
-            const circle = new Circle({
-              left: pointer.x,
-              top: pointer.y,
-              radius: 10,
-              fill: '#2563eb',
-              originX: 'center',
-              originY: 'center',
-              selectable: false,
-              hasControls: false,
-            });
-            fabricCanvas.add(circle);
-            fabricCanvas.renderAll();
+            toolsManagerRef.current?.handlePin(pointer);
           }
         });
         break;
@@ -113,55 +109,31 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
         fabricCanvas.defaultCursor = "crosshair";
         fabricCanvas.on('mouse:down', (options) => {
           if (activeTool === "rectangle") {
-            setIsDrawing(true);
             const pointer = fabricCanvas.getPointer(options.e);
-            startPointRef.current = { x: pointer.x, y: pointer.y };
+            toolsManagerRef.current?.startRectangle(pointer);
           }
         });
 
         fabricCanvas.on('mouse:move', (options) => {
-          if (activeTool === "rectangle" && isDrawing && startPointRef.current) {
+          if (activeTool === "rectangle") {
             const pointer = fabricCanvas.getPointer(options.e);
-            const startPoint = startPointRef.current;
-            
-            const rect = new Rect({
-              left: Math.min(startPoint.x, pointer.x),
-              top: Math.min(startPoint.y, pointer.y),
-              width: Math.abs(startPoint.x - pointer.x),
-              height: Math.abs(startPoint.y - pointer.y),
-              fill: 'transparent',
-              stroke: '#2563eb',
-              strokeWidth: 2,
-              selectable: false,
-            });
-
-            fabricCanvas.remove(fabricCanvas.getObjects().find(obj => 
-              obj.type === 'rect' && obj.data?.isTemp
-            ));
-            rect.data = { isTemp: true };
-            fabricCanvas.add(rect);
-            fabricCanvas.renderAll();
+            toolsManagerRef.current?.updateRectangle(pointer);
           }
         });
 
         fabricCanvas.on('mouse:up', () => {
-          if (activeTool === "rectangle" && isDrawing) {
-            const tempRect = fabricCanvas.getObjects().find(obj => 
-              obj.type === 'rect' && obj.data?.isTemp
-            );
-            if (tempRect) {
-              tempRect.data = { isTemp: false };
-              tempRect.set('selectable', false);
-              tempRect.set('hasControls', false);
+          if (activeTool === "rectangle") {
+            const finished = toolsManagerRef.current?.finishRectangle();
+            if (finished) {
+              // Switch back to select mode after rectangle is created
+              const event = new CustomEvent('toolSelect', { detail: 'select' });
+              window.dispatchEvent(event);
             }
-            setIsDrawing(false);
-            startPointRef.current = null;
-            fabricCanvas.renderAll();
           }
         });
         break;
     }
-  }, [activeTool, fabricCanvas, isDrawing]);
+  }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
     const loadPDF = async () => {
@@ -207,26 +179,43 @@ export const PDFViewer = ({ module, level, activeTool }: PDFViewerProps) => {
   }, [module, level, fabricCanvas]);
 
   const handleUndo = () => {
-    if (fabricCanvas) {
-      fabricCanvas.remove(fabricCanvas.getObjects()[fabricCanvas.getObjects().length - 1]);
-      fabricCanvas.renderAll();
-    }
+    historyManagerRef.current?.undo();
   };
 
   const handleRedo = () => {
-    // Implement when we have history tracking
-    toast("Redo not implemented yet");
+    historyManagerRef.current?.redo();
   };
 
   const handleClear = () => {
     if (fabricCanvas) {
-      fabricCanvas.getObjects().forEach((obj) => {
-        if (obj !== fabricCanvas.backgroundImage) {
-          fabricCanvas.remove(obj);
-        }
-      });
-      fabricCanvas.renderAll();
-      toast("Canvas cleared!");
+      const clearCanvas = () => {
+        fabricCanvas.getObjects().forEach((obj) => {
+          if (obj !== fabricCanvas.backgroundImage) {
+            fabricCanvas.remove(obj);
+          }
+        });
+        fabricCanvas.renderAll();
+        historyManagerRef.current?.saveState();
+        toast("Canvas cleared!");
+      };
+
+      return (
+        <AlertDialog>
+          <AlertDialogTrigger>Clear Canvas</AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action will clear all annotations from the canvas. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={clearCanvas}>Clear</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      );
     }
   };
 

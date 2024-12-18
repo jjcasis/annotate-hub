@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, PencilBrush, IText } from "fabric";
+import { Canvas as FabricCanvas, PencilBrush, IText, Image as FabricImage } from "fabric";
 import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
 import { PropertiesBar } from "./PropertiesBar";
@@ -157,19 +157,15 @@ export const PDFViewer = ({ pdfPath, activeTool }: PDFViewerProps) => {
         
         const dataUrl = canvas.toDataURL();
         
-        // Update to use the correct Fabric.js v6 API for setting background image
-        fabricCanvas.setBackgroundColor(null, () => {
-          fabricCanvas.loadImage(dataUrl, {
-            scaleX: fabricCanvas.width! / viewport.width,
-            scaleY: fabricCanvas.height! / viewport.height,
-          }).then((img) => {
+        fabricCanvas.backgroundColor = null;
+        FabricImage.fromURL(dataUrl, (img) => {
+          if (img) {
             fabricCanvas.backgroundImage = img;
+            img.scaleX = fabricCanvas.width! / viewport.width;
+            img.scaleY = fabricCanvas.height! / viewport.height;
             fabricCanvas.renderAll();
             toast("PDF loaded successfully");
-          }).catch((error) => {
-            console.error("Error loading image:", error);
-            toast.error("Error loading PDF");
-          });
+          }
         });
       } catch (error) {
         console.error("Error loading PDF:", error);

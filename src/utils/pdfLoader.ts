@@ -37,7 +37,7 @@ export const loadPDFIntoCanvas = async (
     return new Promise((resolve, reject) => {
       FabricImage.fromURL(
         dataUrl,
-        (img) => {
+        (img: FabricImage) => {
           if (img) {
             const scale = fabricCanvas.width! / viewport.width;
             img.scale(scale);

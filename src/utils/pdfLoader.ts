@@ -2,6 +2,9 @@ import * as pdfjsLib from "pdfjs-dist";
 import { Canvas as FabricCanvas, Image as FabricImage } from "fabric";
 import { toast } from "sonner";
 
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 export const loadPDFIntoCanvas = async (
   pdfPath: string,
   fabricCanvas: FabricCanvas
@@ -34,13 +37,10 @@ export const loadPDFIntoCanvas = async (
     return new Promise((resolve, reject) => {
       FabricImage.fromURL(
         dataUrl,
-        {
-          scaleX: fabricCanvas.width! / viewport.width,
-          scaleY: fabricCanvas.height! / viewport.height,
-          crossOrigin: 'anonymous'
-        },
         (img) => {
           if (img) {
+            const scale = fabricCanvas.width! / viewport.width;
+            img.scale(scale);
             fabricCanvas.backgroundImage = img;
             fabricCanvas.renderAll();
             toast("PDF loaded successfully");
@@ -48,7 +48,8 @@ export const loadPDFIntoCanvas = async (
           } else {
             reject(new Error("Failed to load image"));
           }
-        }
+        },
+        { crossOrigin: 'anonymous' }
       );
     });
   } catch (error) {

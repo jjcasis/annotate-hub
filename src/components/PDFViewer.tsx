@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, PencilBrush, IText, Image as FabricImage } from "fabric";
-import * as pdfjsLib from "pdfjs-dist";
+import { Canvas as FabricCanvas, PencilBrush, IText } from "fabric";
 import { toast } from "sonner";
 import { PropertiesBar } from "./PropertiesBar";
 import { HistoryManager } from "../utils/historyManager";
 import { ToolsManager } from "../utils/toolsManager";
+import { loadPDFIntoCanvas } from "../utils/pdfLoader";
+import { CanvasInitializer } from "./CanvasInitializer";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface PDFViewerProps {
@@ -20,32 +21,13 @@ export const PDFViewer = ({ pdfPath, activeTool }: PDFViewerProps) => {
   const toolsManagerRef = useRef<ToolsManager | null>(null);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
+    const handleObjectSelected = (event: CustomEvent) => {
+      setSelectedObject(event.detail);
+    };
 
-    const canvas = new FabricCanvas(canvasRef.current, {
-      width: 800,
-      height: 600,
-      backgroundColor: "#ffffff",
-    });
-
-    canvas.freeDrawingBrush = new PencilBrush(canvas);
-    canvas.freeDrawingBrush.color = "#2563eb";
-    canvas.freeDrawingBrush.width = 2;
-
-    canvas.on('selection:created', (e) => setSelectedObject(e.selected?.[0]));
-    canvas.on('selection:updated', (e) => setSelectedObject(e.selected?.[0]));
-    canvas.on('selection:cleared', () => setSelectedObject(null));
-    canvas.on('object:modified', () => {
-      historyManagerRef.current?.saveState();
-    });
-
-    historyManagerRef.current = new HistoryManager(canvas);
-    toolsManagerRef.current = new ToolsManager(canvas, historyManagerRef.current);
-
-    setFabricCanvas(canvas);
-
+    window.addEventListener('objectSelected', handleObjectSelected as EventListener);
     return () => {
-      canvas.dispose();
+      window.removeEventListener('objectSelected', handleObjectSelected as EventListener);
     };
   }, []);
 
@@ -134,55 +116,9 @@ export const PDFViewer = ({ pdfPath, activeTool }: PDFViewerProps) => {
   }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
-    const loadPDF = async () => {
-      if (!pdfPath || !fabricCanvas) return;
-
-      try {
-        const loadingTask = pdfjsLib.getDocument(pdfPath);
-        const pdf = await loadingTask.promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.0 });
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        
-        if (!context) return;
-        
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise;
-        
-        const dataUrl = canvas.toDataURL();
-        
-        fabricCanvas.backgroundColor = null;
-        FabricImage.fromURL(dataUrl, (img) => {
-          if (img) {
-            fabricCanvas.backgroundImage = img;
-            img.scaleX = fabricCanvas.width! / viewport.width;
-            img.scaleY = fabricCanvas.height! / viewport.height;
-            fabricCanvas.renderAll();
-            toast("PDF loaded successfully");
-          }
-        });
-      } catch (error) {
-        console.error("Error loading PDF:", error);
-        toast.error("Error loading PDF");
-      }
-    };
-
-    loadPDF();
+    if (!pdfPath || !fabricCanvas) return;
+    loadPDFIntoCanvas(pdfPath, fabricCanvas);
   }, [pdfPath, fabricCanvas]);
-
-  const handleUndo = () => {
-    historyManagerRef.current?.undo();
-  };
-
-  const handleRedo = () => {
-    historyManagerRef.current?.redo();
-  };
 
   const handleClear = () => {
     if (fabricCanvas) {
@@ -219,6 +155,13 @@ export const PDFViewer = ({ pdfPath, activeTool }: PDFViewerProps) => {
 
   return (
     <div className="flex flex-col gap-4">
+      <CanvasInitializer
+        canvasRef={canvasRef}
+        setFabricCanvas={setFabricCanvas}
+        activeTool={activeTool}
+        historyManagerRef={historyManagerRef}
+        toolsManagerRef={toolsManagerRef}
+      />
       {selectedObject && (
         <PropertiesBar
           object={selectedObject}

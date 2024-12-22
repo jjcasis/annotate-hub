@@ -2,15 +2,24 @@ import * as pdfjsLib from "pdfjs-dist";
 import { Canvas as FabricCanvas, Image as FabricImage } from "fabric";
 import { toast } from "sonner";
 
-// Configure PDF.js worker to use local worker
-const pdfjsWorker = await import("pdfjs-dist/build/pdf.worker.mjs");
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// Initialize PDF.js worker
+const initializeWorker = () => {
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    const workerUrl = new URL(
+      'pdfjs-dist/build/pdf.worker.mjs',
+      import.meta.url
+    ).toString();
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+  }
+};
 
 export const loadPDFIntoCanvas = async (
   pdfPath: string,
   fabricCanvas: FabricCanvas
 ): Promise<void> => {
   try {
+    initializeWorker();
+    
     const loadingTask = pdfjsLib.getDocument(pdfPath);
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
